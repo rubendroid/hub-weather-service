@@ -1,1 +1,17 @@
-{\n  "main": "server.js",\n  "scripts": {\n    "start": "node server.js",\n    "dev": "node server.js",\n    "test": "existing test script here"\n  }\n}
+{
+  "name": "hub-weather-service",
+  "version": "1.0.0",
+  "description": "Microservicio de clima para Hub Education",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.6",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  }
+}
