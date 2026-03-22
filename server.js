@@ -5,8 +5,8 @@ const cors = require('cors');
 const app = express();
 const PORT = 3000;
 
-// Coordenadas fijas de Buenos Aires
-const LOCATION = {
+// Coordenadas por defecto (Buenos Aires)
+const DEFAULT_LOCATION = {
     lat: -34.6,
     lon: -58.38,
     name: 'Buenos Aires'
@@ -64,56 +64,85 @@ function calcFlightAssessment(windSpeed, gusts, precip) {
 // Endpoint principal de clima
 app.get('/weather', async (req, res) => {
     try {
-        const { lat, lon } = LOCATION;
+        // Usar coordenadas del query string si se envían, sino las por defecto
+        const lat = req.query.lat != null ? parseFloat(req.query.lat) : DEFAULT_LOCATION.lat;
+        const lon = req.query.lon != null ? parseFloat(req.query.lon) : DEFAULT_LOCATION.lon;
+        const locationName = (lat === DEFAULT_LOCATION.lat && lon === DEFAULT_LOCATION.lon)
+            ? DEFAULT_LOCATION.name
+            : `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
 
-        // Consultamos Open-Meteo con datos actuales y horarios adicionales.
-        // current_weather provee: temperatura y velocidad de viento.
-        // hourly provee: ráfagas, visibilidad, nubosidad y prob. de precipitación.
-        // Nota: precipitation_probability no siempre tiene valores en tiempo real;
-        //       se toma el valor de la hora más cercana al momento actual.
         const url = [
             `https://api.open-meteo.com/v1/forecast`,
             `?latitude=${lat}&longitude=${lon}`,
             `&current_weather=true`,
-            `&hourly=wind_gusts_10m,visibility,cloudcover,precipitation_probability`,
-            `&timezone=America%2FSao_Paulo`,
+            `&hourly=wind_gusts_10m,visibility,cloud_cover,precipitation_probability,relative_humidity_2m`,
+            `&timezone=auto`,
             `&forecast_days=1`
         ].join('');
 
-        const response = await axios.get(url);
-        const data = response.data;
+        // Hacer ambas llamadas en paralelo para mayor velocidad
+        const kpPromise = axios.get(
+            'https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json',
+            { timeout: 3000 }
+        ).catch(() => null);
 
+        const [response, kpRes] = await Promise.all([
+            axios.get(url),
+            kpPromise
+        ]);
+
+        const data = response.data;
         const cw = data.current_weather;
         const hourly = data.hourly;
 
-        // Encontrar el índice de la hora actual en el array horario
-        const currentTime = cw.time; // Ej: "2026-03-16T00:00"
+        const currentTime = cw.time;
         let hourIndex = hourly.time.indexOf(currentTime);
-        // Si no coincide exactamente, tomamos el índice más cercano disponible
         if (hourIndex === -1) {
             hourIndex = 0;
         }
 
-        const windSpeed   = cw.windspeed;                              // km/h
-        const temperature = cw.temperature;                            // °C
-        const gusts       = hourly.wind_gusts_10m[hourIndex] ?? 0;    // km/h
-        const visibility  = hourly.visibility[hourIndex] ?? 0;         // metros
-        const cloudCover  = hourly.cloudcover[hourIndex] ?? 0;         // %
+        const windSpeed   = cw.windspeed;                                        // km/h
+        const temperature = cw.temperature;                                      // °C
+        const gusts       = hourly.wind_gusts_10m[hourIndex] ?? 0;              // km/h
+        const visibility  = hourly.visibility[hourIndex] ?? 0;                   // metros
+        const cloudCover  = hourly.cloud_cover[hourIndex] ?? 0;                  // %
         const precipitationProbability = hourly.precipitation_probability[hourIndex] ?? 0; // %
+        const humidity    = hourly.relative_humidity_2m[hourIndex] ?? 0;          // %
 
         const flightAssessment = calcFlightAssessment(windSpeed, gusts, precipitationProbability);
 
+        // Generar ventanas de vuelo horarias
+        const flightWindows = hourly.time.map((hour, i) => {
+            const g  = hourly.wind_gusts_10m[i] ?? 0;
+            const pp = hourly.precipitation_probability[i] ?? 0;
+            const assessment = calcFlightAssessment(g, g, pp);
+            return { hour, status: assessment.status };
+        });
+
+        // Procesar resultado de Kp
+        let kpIndex;
+        if (kpRes && Array.isArray(kpRes.data) && kpRes.data.length > 1) {
+            const latest = kpRes.data[kpRes.data.length - 1];
+            kpIndex = {
+                value: parseFloat(latest[1]),
+                updatedAt: latest[0]
+            };
+        }
+
         res.json({
-            location: LOCATION,
+            location: { lat, lon, name: locationName },
             current: {
                 windSpeed,
                 gusts,
                 visibility,
                 cloudCover,
                 precipitationProbability,
-                temperature
+                temperature,
+                humidity
             },
-            flightAssessment
+            flightAssessment,
+            kpIndex,
+            flightWindows
         });
 
     } catch (error) {
