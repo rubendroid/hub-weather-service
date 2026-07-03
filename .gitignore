@@ -3,3 +3,4 @@ node_modules
 *.log
 cloudflared-weather.*
 weather-service.log
+.claude/
