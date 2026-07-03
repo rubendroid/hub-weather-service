@@ -1,0 +1,10 @@
+# hub-weather — Worker de Cloudflare del servicio de clima.
+# Deploy: npx wrangler login (una vez) && npx wrangler deploy
+# URL resultante: https://hub-weather.<subdominio>.workers.dev
+# (opcional: Custom Domain clima.hubeducation.com.ar desde el dashboard)
+name = "hub-weather"
+main = "src/worker.js"
+compatibility_date = "2026-07-01"
+
+[observability.logs]
+enabled = true

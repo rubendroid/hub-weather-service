@@ -16,14 +16,32 @@ npm install
 
 ## 🚀 Cómo correr el backend
 
-**Producción:**
+### Producción — Cloudflare Worker (recomendado)
+
+El servicio corre hosteado como **Cloudflare Worker** (`src/worker.js`, port 1:1
+del server Express): gratis, sin cold starts y sin depender de una PC prendida
+ni del túnel efímero de trycloudflare.
+
 ```bash
-npm start
+npx wrangler login    # una sola vez (abre el navegador)
+npx wrangler deploy   # publica https://hub-weather.<subdominio>.workers.dev
 ```
 
-**Desarrollo:**
+Probar local sin deploy: `npx wrangler dev --port 8787 --local` y
+`curl http://localhost:8787/weather`.
+
+La app móvil apunta a la URL del Worker (`DEFAULT_API_BASE_URL` en
+`hub-app/src/constants/api.ts`, o en runtime desde Preferencias → Ajustes
+avanzados).
+
+> `server.js` (Express) y `src/worker.js` (Worker) implementan el MISMO
+> contrato. Si tocás la lógica de uno, replicala en el otro.
+
+### Desarrollo local — server Express
+
 ```bash
-npm run dev
+npm start     # producción local
+npm run dev   # con hot-reload
 ```
 
 El servidor escucha en el puerto **3000**, enlazado a `0.0.0.0` para que sea accesible tanto desde `localhost` como desde otros dispositivos en la misma red local.

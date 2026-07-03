@@ -1,1 +1,5 @@
 node_modules
+.wrangler
+*.log
+cloudflared-weather.*
+weather-service.log
